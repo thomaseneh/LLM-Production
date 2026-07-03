@@ -1,4 +1,12 @@
 .env
 .venv/
-__pycache__/
+__pycache__/*
 *.pyc
+*.pyo
+.vscode/
+venv/
+env/
+.env.*
+uv.lock
+Thumbs.db
+Desktop.ini
