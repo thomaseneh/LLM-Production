@@ -1,0 +1,105 @@
+[
+    {
+        "name": "Weather",
+        "prompt": "What's the weather in Dallas tomorrow?",
+        "expected": {
+            "intent": "weather",
+            "entities": {
+                "location": "Dallas"
+            }
+        }
+    },
+    {
+        "name": "Weather Today",
+        "prompt": "Weather in London today",
+        "expected": {
+            "intent": "weather",
+            "entities": {
+                "location": "London"
+            }
+        }
+    },
+    {
+        "name": "Product Search",
+        "prompt": "Show me MacBook Air M3 under $1000",
+        "expected": {
+            "intent": "product_search",
+            "entities": {
+                "query": "MacBook Air M3"
+            }
+        }
+    },
+    {
+        "name": "Gaming Laptop",
+        "prompt": "Find gaming laptops under $900",
+        "expected": {
+            "intent": "product_search",
+            "entities": {
+                "query": "gaming laptops"
+            }
+        }
+    },
+    {
+        "name": "Python Code",
+        "prompt": "Write a Python function to reverse a string",
+        "expected": {
+            "intent": "code"
+        }
+    },
+    {
+        "name": "SQL Code",
+        "prompt": "Write SQL to find duplicate emails",
+        "expected": {
+            "intent": "code"
+        }
+    },
+    {
+        "name": "Java Code",
+        "prompt": "How do I declare a class in Java?",
+        "expected": {
+            "intent": "code"
+        }
+    },
+    {
+        "name": "Math",
+        "prompt": "Calculate 25 * 13",
+        "expected": {
+            "intent": "math"
+        }
+    },
+    {
+        "name": "Math Division",
+        "prompt": "What is 144 divided by 12?",
+        "expected": {
+            "intent": "math"
+        }
+    },
+    {
+        "name": "Reasoning",
+        "prompt": "Why is the sky blue?",
+        "expected": {
+            "intent": "reasoning"
+        }
+    },
+    {
+        "name": "Reasoning 2",
+        "prompt": "Why do airplanes fly?",
+        "expected": {
+            "intent": "reasoning"
+        }
+    },
+    {
+        "name": "Summary",
+        "prompt": "Summarize the following article: Artificial intelligence is changing healthcare by improving diagnostics and automating repetitive tasks.",
+        "expected": {
+            "intent": "summarizer"
+        }
+    },
+    {
+        "name": "Currency",
+        "prompt": "Convert 500 USD to EUR",
+        "expected": {
+            "intent": "currency_conversion"
+        }
+    }
+]
