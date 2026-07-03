@@ -1,4 +1,4 @@
-from backend.app.core.handler import handle
+from prod.backend.app.core.handler import handle
 
 
 print("CartMir AI Assistant\n")
