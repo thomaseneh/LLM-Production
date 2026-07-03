@@ -1,12 +1,27 @@
-.env
-**/.venv/
-**__pycache__/
+# Python caches
+__pycache__/
+*/__pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
-**.vscode/
+
+# Virtual environments
+.venv/
 venv/
 env/
-.env.
-uv.lock
+
+# Environment variables
+.env
+.env.*
+
+# VS Code
+.vscode/
+*/.vscode/
+**/.vscode/
+
+# OS junk
 Thumbs.db
 Desktop.ini
+
+# uv
+uv.lock
