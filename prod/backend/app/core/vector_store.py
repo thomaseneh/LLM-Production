@@ -2,7 +2,7 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
 
-from backend.app.core.data.products import products
+from prod.backend.app.api.v1.routes.products import products
 
 # --- Load embedding model ---
 model = SentenceTransformer("all-MiniLM-L6-v2")

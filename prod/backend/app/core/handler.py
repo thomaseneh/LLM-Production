@@ -1,13 +1,12 @@
-from backend.app.core.router import route
-from backend.app.core.tools import *
-from backend.app.core.llm import call_llm, call_llm_stream
-from backend.app.core.config import MODELS
-# from backend.app.core.tools import search_products, search_products_semantic, weather
-from backend.app.core.data.products import products
-from backend.app.core.tracing import new_trace_id, add_trace_event, close_trace
-from backend.app.core.metrics import METRICS
-from backend.app.core.logger import log_event
-from backend.app.core.metrics import record_request, record_latency
+from prod.backend.app.core.router import route
+from prod.backend.app.core.tools import *
+from prod.backend.app.core.llm import call_llm, call_llm_stream
+from prod.backend.app.core.config import MODELS
+from prod.backend.app.api.v1.routes.products import products
+from prod.backend.app.core.tracing import new_trace_id, add_trace_event, close_trace
+from prod.backend.app.core.metrics import METRICS
+from prod.backend.app.core.logger import log_event
+from prod.backend.app.core.metrics import record_request, record_latency
 
 import time
 

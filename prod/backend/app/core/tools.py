@@ -1,6 +1,6 @@
-from backend.app.core.vector_store import semantic_search
-from backend.app.core.data.products import products
-from backend.app.core.cache import cache_get, cache_set
+from prod.backend.app.core.vector_store import semantic_search
+from prod.backend.app.api.v1.routes.products import products
+from prod.backend.app.core.cache import cache_get, cache_set
 import requests
 
 # -----------------------------

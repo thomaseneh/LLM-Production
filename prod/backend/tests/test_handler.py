@@ -1,7 +1,7 @@
 import json
 import pathlib
 
-from backend.app.core.handler import handle
+from prod.backend.app.core.handler import handle
 
 BASE = pathlib.Path(__file__).parent
 with open(BASE / "test_handler.json", encoding="utf-8") as f:

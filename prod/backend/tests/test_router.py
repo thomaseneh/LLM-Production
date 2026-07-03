@@ -1,7 +1,7 @@
 import json
 import pathlib
 
-from backend.app.core.router import route
+from prod.backend.app.core.router import route
 
 PASS = 0
 FAIL = 0

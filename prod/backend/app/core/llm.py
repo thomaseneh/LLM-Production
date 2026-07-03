@@ -1,8 +1,8 @@
 import json
 import requests
 
-from backend.app.core.config import OPENROUTER_API_KEY
-from backend.app.core.config import BASE_URL
+from prod.backend.app.core.config import OPENROUTER_API_KEY
+from prod.backend.app.core.config import BASE_URL
 
 
 def call_llm(model, messages):

@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from backend.app.core.llm import call_llm
-from backend.app.core.config import MODELS
+from prod.backend.app.core.llm import call_llm
+from prod.backend.app.core.config import MODELS
 
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "router.txt"
 

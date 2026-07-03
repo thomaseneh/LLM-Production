@@ -1,4 +1,4 @@
-from backend.app.core.metrics import METRICS
+from prod.backend.app.core.metrics import METRICS
 
 def show_dashboard():
     print("=== CartMir AI Dashboard ===")
