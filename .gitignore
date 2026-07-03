@@ -1,12 +1,12 @@
 .env
 **/.venv/
-**__pycache__/*
+**__pycache__/
 *.pyc
 *.pyo
-**.vscode/*
+**.vscode/
 venv/
 env/
-.env.*
+.env.
 uv.lock
 Thumbs.db
 Desktop.ini
