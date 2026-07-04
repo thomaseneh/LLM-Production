@@ -92,31 +92,3 @@ def call_llm_fallback(models, messages):
         except Exception:
             continue
     return "All models failed."
-
-# def call_llm(model, messages):
-
-#     response = requests.post(
-
-#         BASE_URL,
-
-#         headers={
-
-#             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-
-#             "Content-Type": "application/json"
-
-#         },
-
-#         json={
-
-#             "model": model,
-
-#             "messages": messages,
-
-#             "temperature": 0.3
-#         }
-#     )
-
-#     response.raise_for_status()
-
-#     return response.json()["choices"][0]["message"]["content"]

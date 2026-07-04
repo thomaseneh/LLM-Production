@@ -25,3 +25,6 @@ Desktop.ini
 
 # uv
 uv.lock
+
+# tests
+tests

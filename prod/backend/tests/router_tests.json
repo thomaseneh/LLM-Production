@@ -3,9 +3,10 @@
         "name": "Weather",
         "prompt": "What's the weather in Dallas tomorrow?",
         "expected": {
-            "intent": "weather",
+            "intents": [{"intent": "weather"}],
             "entities": {
-                "location": "Dallas"
+                "location": "Dallas",
+                "date": "tomorrow"
             }
         }
     },
@@ -13,9 +14,10 @@
         "name": "Weather Today",
         "prompt": "Weather in London today",
         "expected": {
-            "intent": "weather",
+            "intents": [{"intent": "weather"}],
             "entities": {
-                "location": "London"
+                "location": "London",
+                "date": "today"
             }
         }
     },
@@ -23,9 +25,10 @@
         "name": "Product Search",
         "prompt": "Show me MacBook Air M3 under $1000",
         "expected": {
-            "intent": "product_search",
+            "intents": [{"intent": "product_search"}],
             "entities": {
-                "query": "MacBook Air M3"
+                "product": "MacBook Air M3",
+                "price": 1000
             }
         }
     },
@@ -33,9 +36,10 @@
         "name": "Gaming Laptop",
         "prompt": "Find gaming laptops under $900",
         "expected": {
-            "intent": "product_search",
+            "intents": [{"intent": "product_search"}],
             "entities": {
-                "query": "gaming laptops"
+                "product_type": "gaming laptops",
+                "price": 900
             }
         }
     },
@@ -43,63 +47,87 @@
         "name": "Python Code",
         "prompt": "Write a Python function to reverse a string",
         "expected": {
-            "intent": "code"
+            "intents": [{"intent": "code"}],
+            "entities": {
+                "language": "Python"
+            }
         }
     },
     {
         "name": "SQL Code",
         "prompt": "Write SQL to find duplicate emails",
         "expected": {
-            "intent": "code"
+            "intents": [{"intent": "code"}],
+            "entities": {
+                "language": "SQL"
+            }
         }
     },
     {
         "name": "Java Code",
         "prompt": "How do I declare a class in Java?",
         "expected": {
-            "intent": "code"
+            "intents": [{"intent": "code"}],
+            "entities": {
+                "language": "Java"
+            }
         }
     },
     {
         "name": "Math",
         "prompt": "Calculate 25 * 13",
         "expected": {
-            "intent": "math"
+            "intents": [{"intent": "math"}],
+            "entities": {
+                "numbers": [25, 13]
+            }
         }
     },
     {
         "name": "Math Division",
         "prompt": "What is 144 divided by 12?",
         "expected": {
-            "intent": "math"
+            "intents": [{"intent": "math"}],
+            "entities": {
+                "number1": 144,
+                "number2": 12
+            }
         }
     },
     {
         "name": "Reasoning",
         "prompt": "Why is the sky blue?",
         "expected": {
-            "intent": "reasoning"
+            "intents": [{"intent": "reasoning"}],
+            "entities": {}
         }
     },
     {
         "name": "Reasoning 2",
         "prompt": "Why do airplanes fly?",
         "expected": {
-            "intent": "reasoning"
+            "intents": [{"intent": "reasoning"}],
+            "entities": {}
         }
     },
     {
         "name": "Summary",
         "prompt": "Summarize the following article: Artificial intelligence is changing healthcare by improving diagnostics and automating repetitive tasks.",
         "expected": {
-            "intent": "summarizer"
+            "intents": [{"intent": "summarizer"}],
+            "entities": {}
         }
     },
     {
         "name": "Currency",
         "prompt": "Convert 500 USD to EUR",
         "expected": {
-            "intent": "currency_conversion"
+            "intents": [{"intent": "currency_conversion"}],
+            "entities": {
+                "amount": 500,
+                "from_currency": "USD",
+                "to_currency": "EUR"
+            }
         }
     }
 ]

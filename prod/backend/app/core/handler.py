@@ -1,17 +1,62 @@
+import time
+
 from prod.backend.app.core.router import route
-from prod.backend.app.core.tools import *
+from prod.backend.app.core.tools import (
+    search_products,
+    search_products_semantic,
+    weather
+)
 from prod.backend.app.core.llm import call_llm, call_llm_stream
 from prod.backend.app.core.config import MODELS
-from prod.backend.app.api.v1.routes.products import products
 from prod.backend.app.core.tracing import new_trace_id, add_trace_event, close_trace
-from prod.backend.app.core.metrics import METRICS
-from prod.backend.app.core.logger import log_event
 from prod.backend.app.core.metrics import record_request, record_latency
-
-import time
+from prod.backend.app.core.logger import log_event
 
 
 MIN_CONFIDENCE = 0.60
+
+
+def unescape_latex(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+
+    return (
+        text.replace("\\(", "(")
+            .replace("\\)", ")")
+            .replace("\\[", "[")
+            .replace("\\]", "]")
+    )
+def strip_latex_wrappers(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+
+    # Remove LaTeX math delimiters entirely
+    cleaned = (
+        text.replace("(", "")
+            .replace(")", "")
+            .replace("[", "")
+            .replace("]", "")
+    )
+
+    return cleaned.strip()
+
+def normalize_query(entities, user_input):
+    """
+    Normalize product search query from router entities.
+    Router now returns:
+        - product
+        - product_type
+        - max_price / price
+    """
+    query = entities.get("product")
+
+    if query is None:
+        query = entities.get("product_type")
+
+    if query is None:
+        query = user_input
+
+    return query
 
 
 def handle(user_input):
@@ -67,10 +112,15 @@ def handle(user_input):
 
     intent = selected_intent
 
-    # --- PRODUCT SEARCH ---
+    # ============================================================
+    # PRODUCT SEARCH
+    # ============================================================
     if intent == "product_search":
-        query = entities.get("query")
 
+        query = normalize_query(entities, user_input)
+        max_price = entities.get("max_price") or entities.get("price")
+
+        # --- SEMANTIC SEARCH ---
         semantic_results = search_products_semantic(query)
         if semantic_results:
             messages = [
@@ -86,7 +136,7 @@ def handle(user_input):
             close_trace(trace_id)
             return result
 
-        max_price = entities.get("max_price")
+        # --- KEYWORD SEARCH ---
         data = search_products(query, max_price)
 
         if not data:
@@ -106,7 +156,9 @@ def handle(user_input):
         close_trace(trace_id)
         return result
 
-    # --- WEATHER ---
+    # ============================================================
+    # WEATHER
+    # ============================================================
     elif intent == "weather":
         location = entities.get("location")
         if not location:
@@ -128,7 +180,9 @@ def handle(user_input):
         close_trace(trace_id)
         return result
 
-    # --- MATH ---
+    # ============================================================
+    # MATH
+    # ============================================================
     elif intent == "math":
         messages = [
             {"role": "system", "content": f"TRACE_ID: {trace_id}"},
@@ -139,11 +193,19 @@ def handle(user_input):
         add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["math"]})
         result = call_llm(MODELS["math"], messages)
 
+        # Fix escaped LaTeX
+        result = unescape_latex(result)
+
+        # Step 2: remove LaTeX wrappers entirely
+        result = strip_latex_wrappers(result)
+
         record_latency(time.time() - start_time)
         close_trace(trace_id)
         return result
 
-    # --- CODE (streaming) ---
+    # ============================================================
+    # CODE (streaming)
+    # ============================================================
     elif intent == "code":
         messages = [
             {"role": "system", "content": f"TRACE_ID: {trace_id}"},
@@ -157,7 +219,9 @@ def handle(user_input):
         close_trace(trace_id)
         return result
 
-    # --- SUMMARIZER (streaming) ---
+    # ============================================================
+    # SUMMARIZER (streaming)
+    # ============================================================
     elif intent == "summarizer":
         if len(user_input.split()) < 20:
             close_trace(trace_id)
@@ -176,10 +240,11 @@ def handle(user_input):
         close_trace(trace_id)
         return result
 
-    # --- REASONING ---
+    # ============================================================
+    # REASONING
+    # ============================================================
     elif intent == "reasoning":
 
-        # Hybrid routing: cheap → strong → final
         if selected_confidence < 0.75:
 
             add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["cheap"]})
@@ -204,7 +269,6 @@ def handle(user_input):
             close_trace(trace_id)
             return result
 
-        # Normal reasoning (streaming)
         messages = [
             {"role": "system", "content": f"TRACE_ID: {trace_id}"},
             {"role": "system", "content": "Provide a clear and correct explanation."},
@@ -218,7 +282,9 @@ def handle(user_input):
         close_trace(trace_id)
         return result
 
-    # --- SUPPORT (DEFAULT) ---
+    # ============================================================
+    # SUPPORT (DEFAULT)
+    # ============================================================
     messages = [
         {"role": "system", "content": f"TRACE_ID: {trace_id}"},
         {"role": "system", "content": "You are CartMir customer support."},
@@ -231,142 +297,3 @@ def handle(user_input):
     record_latency(time.time() - start_time)
     close_trace(trace_id)
     return result
-
-
-# from prod.backend.app.core.router import route
-# from prod.backend.app.core.tools import *
-# from prod.backend.app.core.llm import call_llm
-# from prod.backend.app.core.config import MODELS
-
-# def handle(user_input):
-
-#     task = route(user_input)
-#     intent = task.get("intent", "support")
-#     entities = task.get("entities", {})
-#     confidence = task.get("confidence", 1.0)
-
-#     # PRODUCT SEARCH
-#     if intent == "product_search":
-#         query = entities.get("query")
-#         if not query:
-#             return "Error: No product query provided."
-
-#         max_price = entities.get("max_price")
-#         data = search_products(query, max_price)
-
-#         if not data:
-#             return "No matching products found."
-
-#         return call_llm(
-#             MODELS["reasoning"],
-#             [
-#                 {
-#                     "role": "system",
-#                     "content": "Present these products professionally."
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": str(data)
-#                 }
-#             ]
-#         )
-
-#     # WEATHER
-#     elif intent == "weather":
-#         location = entities.get("location")
-#         if not location:
-#             return "Error: No location provided for weather lookup."
-
-#         data = weather(location)
-
-#         return call_llm(
-#             MODELS["reasoning"],
-#             [
-#                 {
-#                     "role": "system",
-#                     "content": "Explain this weather data clearly."
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": str(data)
-#                 }
-#             ]
-#         )
-
-#     # MATH
-#     elif intent == "math":
-#         return call_llm(
-#             MODELS["math"],
-#             [
-#                 {
-#                     "role": "system",
-#                     "content": "Solve the math problem."
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": user_input
-#                 }
-#             ]
-#         )
-
-#     # CODE
-#     elif intent == "code":
-#         return call_llm(
-#             MODELS["code"],
-#             [
-#                 {
-#                     "role": "user",
-#                     "content": user_input
-#                 }
-#             ]
-#         )
-
-#     # SUMMARIZER
-#     elif intent == "summarizer":
-#         if len(user_input.split()) < 20:
-#             return "Error: No article text provided for summarization."
-
-#         return call_llm(
-#             MODELS["summarizer"],
-#             [
-#                 {
-#                     "role": "system",
-#                     "content": "Summarize the following text clearly and concisely."
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": user_input
-#                 }
-#             ]
-#         )
-
-#     # REASONING
-#     elif intent == "reasoning":
-#         return call_llm(
-#             MODELS["reasoning"],
-#             [
-#                 {
-#                     "role": "system",
-#                     "content": "Provide a clear and correct explanation."
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": user_input
-#                 }
-#             ]
-#         )
-
-#     # SUPPORT (DEFAULT)
-#     return call_llm(
-#         MODELS["support"],
-#         [
-#             {
-#                 "role": "system",
-#                 "content": "You are CartMir customer support."
-#             },
-#             {
-#                 "role": "user",
-#                 "content": user_input
-#             }
-#         ]
-#     )

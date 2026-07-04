@@ -10,26 +10,37 @@ with open(PROMPT_PATH, encoding="utf-8") as f:
     ROUTER_PROMPT = f.read()
 
 
+def clean_json(text: str) -> str:
+    """
+    Remove Markdown code fences and trim whitespace.
+    """
+    text = text.strip()
+
+    # Remove ```json or ``` blocks
+    if text.startswith("```"):
+        text = text.replace("```json", "")
+        text = text.replace("```", "")
+        text = text.strip()
+
+    return text
+
+
 def route(user_input):
 
     response = call_llm(
         MODELS["router"],
         [
-            {
-                "role": "system",
-                "content": ROUTER_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": user_input,
-            },
+            {"role": "system", "content": ROUTER_PROMPT},
+            {"role": "user", "content": user_input},
         ],
     )
 
-    try:
-        return json.loads(response)
+    cleaned = clean_json(response)
 
-    except json.JSONDecodeError:
+    try:
+        return json.loads(cleaned)
+
+    except Exception:
 
         print("\n========== ROUTER ERROR ==========")
         print("User:")
@@ -40,8 +51,6 @@ def route(user_input):
         print("==================================\n")
 
         return {
-            "intent": "support",
-            "entities": {
-                "prompt": user_input
-            }
+            "intents": [{"intent": "support"}],
+            "entities": {"prompt": user_input}
         }

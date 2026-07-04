@@ -65,17 +65,6 @@ def search_products(query, max_price=None):
 # WEATHER LOOKUP
 # -----------------------------
 
-# TEXAS_LOCATIONS = {
-#     "dallas": (32.7767, -96.7970),
-#     "houston": (29.7604, -95.3698),
-#     "austin": (30.2672, -97.7431),
-#     "san antonio": (29.4241, -98.4936),
-#     "fort worth": (32.7555, -97.3308),
-#     "plano": (33.0198, -96.6989),
-#     "rockwall": (32.9312, -96.4597),
-#     "arlington": (32.7357, -97.1081)
-# }
-
 def weather(location):
     """
     Production-ready weather lookup using Open-Meteo.
