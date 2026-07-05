@@ -27,4 +27,4 @@ Desktop.ini
 uv.lock
 
 # tests
-tests
+**/tests/

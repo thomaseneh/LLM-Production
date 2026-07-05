@@ -1,18 +1,9 @@
-from prod.backend.app.core.handler import handle
+from fastapi import FastAPI
+from api.v1.routes import api_v1_router
 
+app = FastAPI(
+    title="CartMir Public API",
+    version="1.0.0",
+)
 
-print("CartMir AI Assistant\n")
-
-while True:
-
-    prompt = input("You: ")
-
-    if prompt.lower() == "exit":
-
-        break
-
-    response = handle(prompt)
-
-    print("\nAssistant:\n")
-
-    print(response)
+app.include_router(api_v1_router)
