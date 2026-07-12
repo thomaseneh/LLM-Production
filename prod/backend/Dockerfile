@@ -21,6 +21,7 @@ RUN uv sync --frozen --no-dev
 
 # Copy the FastAPI application.
 COPY prod/backend/app ./app
+COPY prod/backend/prompts ./prompts
 
 EXPOSE 8000
 
