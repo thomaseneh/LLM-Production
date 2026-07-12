@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: prod/backend/Dockerfile
 
     container_name: toms-ai-backend
 
@@ -33,7 +33,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: prod/frontend/Dockerfile
       args:
         VITE_API_URL: ""
 

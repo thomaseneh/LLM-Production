@@ -10,4 +10,5 @@ dependencies = [
     "fastapi>=0.139.0",
     "requests>=2.34.2",
     "sentence-transformers>=5.6.0",
+    "uvicorn[standard]>=0.51.0",
 ]

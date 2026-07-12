@@ -20,7 +20,7 @@ COPY uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Copy the FastAPI application.
-COPY backend/app ./app
+COPY prod/backend/app ./app
 
 EXPOSE 8000
 
