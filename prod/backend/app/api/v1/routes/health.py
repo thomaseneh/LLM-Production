@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 import time
+from app.core.handler import handle
 
 router = APIRouter(prefix="/health")
 

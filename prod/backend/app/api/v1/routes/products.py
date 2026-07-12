@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
 
-from prod.backend.app.core.tools import search_products, search_products_semantic
+from app.core.tools import search_products, search_products_semantic
+from app.core.handler import handle
 
 router = APIRouter(prefix="/products")
 

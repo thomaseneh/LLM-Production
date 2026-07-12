@@ -1,94 +1,137 @@
 import json
+from collections.abc import Generator
+
 import requests
 
-from prod.backend.app.core.config import OPENROUTER_API_KEY
-from prod.backend.app.core.config import BASE_URL
+from app.core.config import BASE_URL, OPENROUTER_API_KEY
 
 
-def call_llm(model, messages):
+def _build_headers() -> dict[str, str]:
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is missing. "
+            "Add it to your .env file."
+        )
 
-    headers = {
+    return {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "User-Agent": "CartMir-LLM-Router/1.0"
+        "User-Agent": "CartMir-LLM-Router/1.0",
     }
 
+
+def call_llm(
+    model: str,
+    messages: list[dict[str, str]],
+    *,
+    temperature: float = 0.2,
+    max_tokens: int = 2048,
+) -> str:
+    """
+    Make a normal, non-streaming LLM request.
+
+    Used by router.py because the router needs the full JSON response
+    before it can parse the selected intent.
+    """
     payload = {
         "model": model,
         "messages": messages,
-        "max_tokens": 512,
-        "temperature": 0.3,
-        "top_p": 1,
-        "frequency_penalty": 0,
-        "presence_penalty": 0
+        "stream": False,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
 
     response = requests.post(
         BASE_URL,
-        headers=headers,
+        headers=_build_headers(),
         json=payload,
-        timeout=30
+        timeout=180,
     )
 
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+
+    data = response.json()
+
+    choices = data.get("choices", [])
+
+    if not choices:
+        raise RuntimeError(
+            f"No choices returned from model: {model}"
+        )
+
+    message = choices[0].get("message", {})
+    content = message.get("content")
+
+    if not isinstance(content, str):
+        raise RuntimeError(
+            f"No text content returned from model: {model}"
+        )
+
+    return content
 
 
-def call_llm_stream(model, messages):
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "User-Agent": "CartMir-LLM-Router/1.0"
-    }
-
+def call_llm_stream(
+    model: str,
+    messages: list[dict[str, str]],
+    *,
+    temperature: float = 0.2,
+    max_tokens: int = 8192,
+) -> Generator[str, None, None]:
+    """
+    Stream an LLM response one text chunk at a time.
+    """
     payload = {
         "model": model,
         "messages": messages,
         "stream": True,
-        "max_tokens": 512,
-        "temperature": 0.3,
-        "top_p": 1,
-        "frequency_penalty": 0,
-        "presence_penalty": 0
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
 
     with requests.post(
         BASE_URL,
-        headers=headers,
+        headers=_build_headers(),
         json=payload,
         stream=True,
-        timeout=30
+        timeout=180,
     ) as response:
-
         response.raise_for_status()
 
-        for line in response.iter_lines():
+        for line in response.iter_lines(
+            decode_unicode=True,
+        ):
             if not line:
                 continue
 
-            if not line.startswith(b"data: "):
+            if not line.startswith("data:"):
                 continue
 
-            data = line[len(b"data: "):]
+            data = line.removeprefix("data:").strip()
 
-            if data == b"[DONE]":
+            if data == "[DONE]":
                 break
 
             try:
-                chunk = json.loads(data)
-                delta = chunk["choices"][0]["delta"]
-                content = delta.get("content")
-                if content:
-                    yield content
-            except Exception:
+                event = json.loads(data)
+            except json.JSONDecodeError:
                 continue
 
+            choices = event.get("choices", [])
 
-def call_llm_fallback(models, messages):
-    for m in models:
-        try:
-            return call_llm(m, messages)
-        except Exception:
-            continue
-    return "All models failed."
+            if not choices:
+                continue
+
+            choice = choices[0]
+            delta = choice.get("delta", {})
+            content = delta.get("content")
+
+            if isinstance(content, str) and content:
+                yield content
+
+            finish_reason = choice.get("finish_reason")
+
+            if finish_reason:
+                print(
+                    "STREAM FINISH REASON:",
+                    finish_reason,
+                )

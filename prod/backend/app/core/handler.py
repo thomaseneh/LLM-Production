@@ -1,299 +1,640 @@
 import time
+from collections.abc import Generator
+from typing import Any
 
-from prod.backend.app.core.router import route
-from prod.backend.app.core.tools import (
+from app.core.config import DEFAULT_MODEL_KEY, MODELS
+from app.core.llm import call_llm_stream
+from app.core.logger import log_event
+from app.core.metrics import record_latency, record_request
+from app.core.router import route
+from app.core.tools import (
     search_products,
     search_products_semantic,
-    weather
+    weather,
 )
-from prod.backend.app.core.llm import call_llm, call_llm_stream
-from prod.backend.app.core.config import MODELS
-from prod.backend.app.core.tracing import new_trace_id, add_trace_event, close_trace
-from prod.backend.app.core.metrics import record_request, record_latency
-from prod.backend.app.core.logger import log_event
+from app.core.tracing import (
+    add_trace_event,
+    close_trace,
+    new_trace_id,
+)
 
 
 MIN_CONFIDENCE = 0.60
+MIN_SUPPORT_CONFIDENCE = 0.80
+
+ALLOWED_MODEL_MODES = {
+    "auto",
+    "reasoning",
+    "code",
+    "math",
+    "support",
+}
 
 
-def unescape_latex(text: str) -> str:
-    if not isinstance(text, str):
-        return text
+GENERAL_SYSTEM_PROMPT = """
+You are Tom's AI, a helpful general-purpose AI assistant.
 
-    return (
-        text.replace("\\(", "(")
-            .replace("\\)", ")")
-            .replace("\\[", "[")
-            .replace("\\]", "]")
-    )
-def strip_latex_wrappers(text: str) -> str:
-    if not isinstance(text, str):
-        return text
+Answer the user's question directly and accurately.
 
-    # Remove LaTeX math delimiters entirely
-    cleaned = (
-        text.replace("(", "")
-            .replace(")", "")
-            .replace("[", "")
-            .replace("]", "")
-    )
+Formatting rules:
+- Use clean Markdown.
+- Use short paragraphs.
+- Put each list item on its own line.
+- Use headings when the answer has multiple sections.
+- Use bullet points or numbered lists when helpful.
+- Use fenced code blocks for code.
+- Do not place the entire response in one large paragraph.
+- Do not output raw HTML.
+""".strip()
 
-    return cleaned.strip()
 
-def normalize_query(entities, user_input):
+SUPPORT_SYSTEM_PROMPT = """
+You are CartMir customer support.
+
+Help with customer-service topics such as:
+- Orders
+- Shipping
+- Returns
+- Refunds
+- Cancellations
+- Account problems
+- Product assistance
+
+Formatting rules:
+- Use clean Markdown.
+- Be concise and helpful.
+- Ask for missing order details when necessary.
+- Do not invent order or customer information.
+""".strip()
+
+
+PRODUCT_SYSTEM_PROMPT = """
+You are a product assistant.
+
+Present only the relevant products from the provided search results.
+
+Formatting rules:
+- Use clean Markdown.
+- Do not dump raw Python objects or raw database records.
+- Start with a direct answer to the user's question.
+- Use a Markdown table when comparing multiple products.
+- Include useful fields such as name, price, category, availability,
+  and key features.
+- Do not invent missing product information.
+- Keep the response concise.
+""".strip()
+
+
+WEATHER_SYSTEM_PROMPT = """
+You are a weather assistant.
+
+Explain the provided weather data clearly.
+
+Formatting rules:
+- Use clean Markdown.
+- Include the location.
+- Include current conditions and temperature when available.
+- Include relevant forecast information when available.
+- Do not invent information that is not present in the weather data.
+""".strip()
+
+
+MATH_SYSTEM_PROMPT = """
+You are an expert mathematics assistant.
+
+Solve the mathematical problem accurately.
+
+Formatting rules:
+- Use clean Markdown.
+- Show the important steps.
+- Use readable mathematical notation.
+- Clearly identify the final answer.
+""".strip()
+
+
+CODE_SYSTEM_PROMPT = """
+You are an expert software engineering assistant.
+
+Provide correct, practical, complete, and maintainable code.
+
+Formatting rules:
+- Use clean Markdown.
+- Put code inside fenced code blocks.
+- Include the programming language in each code fence.
+- Always complete every code block.
+- Never stop in the middle of a statement.
+- Prioritize completing the code before explaining it.
+- Keep explanations concise.
+""".strip()
+
+
+SUMMARY_SYSTEM_PROMPT = """
+Summarize the provided text clearly and concisely.
+
+Formatting rules:
+- Use clean Markdown.
+- Preserve important facts.
+- Remove repetition.
+- Use bullet points when they improve readability.
+""".strip()
+
+
+def normalize_confidence(value: Any) -> float:
     """
-    Normalize product search query from router entities.
-    Router now returns:
-        - product
-        - product_type
-        - max_price / price
+    Convert a confidence value into a number between 0.0 and 1.0.
     """
-    query = entities.get("product")
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
-    if query is None:
-        query = entities.get("product_type")
-
-    if query is None:
-        query = user_input
-
-    return query
+    return max(0.0, min(confidence, 1.0))
 
 
-def handle(user_input):
+def normalize_query(
+    entities: dict[str, Any],
+    user_input: str,
+) -> str:
+    """
+    Extract a useful product query from router entities.
+    """
+    query = (
+        entities.get("product")
+        or entities.get("product_type")
+        or entities.get("prompt")
+        or user_input
+    )
 
-    # --- TRACE ID ---
-    trace_id = new_trace_id()
-    add_trace_event(trace_id, "REQUEST_RECEIVED", {"user_input": user_input})
-    log_event("TRACE_START", {"trace_id": trace_id})
+    return str(query).strip()
 
-    start_time = time.time()
 
-    # --- ROUTE INPUT ---
-    task = route(user_input)
-    add_trace_event(trace_id, "ROUTER_OUTPUT", task)
-    log_event("ROUTER_OUTPUT", task, trace_id)
+def select_intent(
+    task: dict[str, Any],
+) -> tuple[str, float]:
+    """
+    Select the highest-confidence intent.
 
+    Reasoning is the safe default.
+    """
     intents = task.get("intents", [])
-    entities = task.get("entities", {})
 
-    add_trace_event(trace_id, "ENTITIES", entities)
-    log_event("ENTITIES", entities, trace_id)
+    if not isinstance(intents, list):
+        return DEFAULT_MODEL_KEY, 0.0
 
-    # --- MULTI-INTENT SELECTION ---
-    selected_intent = None
+    selected_intent = DEFAULT_MODEL_KEY
     selected_confidence = 0.0
 
     for item in intents:
-        conf = item.get("confidence", 0.0)
-        if conf > selected_confidence:
-            selected_confidence = conf
-            selected_intent = item.get("intent")
+        if not isinstance(item, dict):
+            continue
 
-    add_trace_event(trace_id, "INTENT_SELECTED", selected_intent)
-    log_event("INTENT", selected_intent, trace_id)
+        intent = str(
+            item.get("intent", "")
+        ).strip().lower()
 
-    # --- METRICS ---
-    record_request(selected_intent)
+        confidence = normalize_confidence(
+            item.get("confidence")
+        )
 
-    # --- CONFIDENCE FALLBACK ---
-    if selected_confidence < MIN_CONFIDENCE:
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "system", "content": "You are CartMir customer support."},
-            {"role": "user", "content": user_input}
-        ]
+        if confidence > selected_confidence:
+            selected_intent = intent
+            selected_confidence = confidence
 
-        add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["support"]})
-        result = call_llm(MODELS["support"], messages)
+    valid_intents = {
+        "support",
+        "product_search",
+        "weather",
+        "math",
+        "code",
+        "summarizer",
+        "reasoning",
+    }
 
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
+    if selected_intent not in valid_intents:
+        return DEFAULT_MODEL_KEY, 0.0
 
-    intent = selected_intent
+    return selected_intent, selected_confidence
 
-    # ============================================================
-    # PRODUCT SEARCH
-    # ============================================================
-    if intent == "product_search":
 
-        query = normalize_query(entities, user_input)
-        max_price = entities.get("max_price") or entities.get("price")
+def get_prompt_for_intent(intent: str) -> str:
+    """
+    Return the system prompt associated with an intent.
+    """
+    prompts = {
+        "reasoning": GENERAL_SYSTEM_PROMPT,
+        "code": CODE_SYSTEM_PROMPT,
+        "math": MATH_SYSTEM_PROMPT,
+        "support": SUPPORT_SYSTEM_PROMPT,
+        "summarizer": SUMMARY_SYSTEM_PROMPT,
+    }
 
-        # --- SEMANTIC SEARCH ---
-        semantic_results = search_products_semantic(query)
-        if semantic_results:
-            messages = [
-                {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-                {"role": "system", "content": "Present these products professionally."},
-                {"role": "user", "content": str(semantic_results)}
-            ]
+    return prompts.get(
+        intent,
+        GENERAL_SYSTEM_PROMPT,
+    )
 
-            add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["reasoning"]})
-            result = call_llm(MODELS["reasoning"], messages)
 
-            record_latency(time.time() - start_time)
-            close_trace(trace_id)
-            return result
+def get_model_key_for_intent(intent: str) -> str:
+    """
+    Map an intent to a model key from MODELS.
+    """
+    mapping = {
+        "reasoning": "reasoning",
+        "code": "code",
+        "math": "math",
+        "support": "support",
+        "summarizer": "summarizer",
+    }
 
-        # --- KEYWORD SEARCH ---
-        data = search_products(query, max_price)
+    return mapping.get(
+        intent,
+        DEFAULT_MODEL_KEY,
+    )
 
-        if not data:
-            close_trace(trace_id)
-            return "No matching products found."
 
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "system", "content": "Present these products professionally."},
-            {"role": "user", "content": str(data)}
-        ]
+def stream_model(
+    model_key: str,
+    system_prompt: str,
+    user_content: str,
+    trace_id: str,
+) -> Generator[str, None, None]:
+    """
+    Stream a model response one chunk at a time.
+    """
+    model_name = MODELS[model_key]
 
-        add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["reasoning"]})
-        result = call_llm(MODELS["reasoning"], messages)
-
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
-
-    # ============================================================
-    # WEATHER
-    # ============================================================
-    elif intent == "weather":
-        location = entities.get("location")
-        if not location:
-            close_trace(trace_id)
-            return "Error: No location provided for weather lookup."
-
-        data = weather(location)
-
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "system", "content": "Explain this weather data clearly."},
-            {"role": "user", "content": str(data)}
-        ]
-
-        add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["reasoning"]})
-        result = call_llm(MODELS["reasoning"], messages)
-
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
-
-    # ============================================================
-    # MATH
-    # ============================================================
-    elif intent == "math":
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "system", "content": "Solve the math problem."},
-            {"role": "user", "content": user_input}
-        ]
-
-        add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["math"]})
-        result = call_llm(MODELS["math"], messages)
-
-        # Fix escaped LaTeX
-        result = unescape_latex(result)
-
-        # Step 2: remove LaTeX wrappers entirely
-        result = strip_latex_wrappers(result)
-
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
-
-    # ============================================================
-    # CODE (streaming)
-    # ============================================================
-    elif intent == "code":
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "user", "content": user_input}
-        ]
-
-        add_trace_event(trace_id, "LLM_CALL_STREAM", {"model": MODELS["code"]})
-        result = call_llm_stream(MODELS["code"], messages)
-
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
-
-    # ============================================================
-    # SUMMARIZER (streaming)
-    # ============================================================
-    elif intent == "summarizer":
-        if len(user_input.split()) < 20:
-            close_trace(trace_id)
-            return "Error: No article text provided for summarization."
-
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "system", "content": "Summarize the following text clearly and concisely."},
-            {"role": "user", "content": user_input}
-        ]
-
-        add_trace_event(trace_id, "LLM_CALL_STREAM", {"model": MODELS["summarizer"]})
-        result = call_llm_stream(MODELS["summarizer"], messages)
-
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
-
-    # ============================================================
-    # REASONING
-    # ============================================================
-    elif intent == "reasoning":
-
-        if selected_confidence < 0.75:
-
-            add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["cheap"]})
-            coarse = call_llm(MODELS["cheap"], [
-                {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-                {"role": "user", "content": user_input}
-            ])
-
-            add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["reasoning"]})
-            refined = call_llm(MODELS["reasoning"], [
-                {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-                {"role": "user", "content": user_input}
-            ])
-
-            add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["final"]})
-            result = call_llm(MODELS["final"], [
-                {"role": "system", "content": "Combine these results"},
-                {"role": "user", "content": f"{coarse}\n{refined}"}
-            ])
-
-            record_latency(time.time() - start_time)
-            close_trace(trace_id)
-            return result
-
-        messages = [
-            {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-            {"role": "system", "content": "Provide a clear and correct explanation."},
-            {"role": "user", "content": user_input}
-        ]
-
-        add_trace_event(trace_id, "LLM_CALL_STREAM", {"model": MODELS["reasoning"]})
-        result = call_llm_stream(MODELS["reasoning"], messages)
-
-        record_latency(time.time() - start_time)
-        close_trace(trace_id)
-        return result
-
-    # ============================================================
-    # SUPPORT (DEFAULT)
-    # ============================================================
     messages = [
-        {"role": "system", "content": f"TRACE_ID: {trace_id}"},
-        {"role": "system", "content": "You are CartMir customer support."},
-        {"role": "user", "content": user_input}
+        {
+            "role": "system",
+            "content": f"TRACE_ID: {trace_id}",
+        },
+        {
+            "role": "system",
+            "content": system_prompt,
+        },
+        {
+            "role": "user",
+            "content": user_content,
+        },
     ]
 
-    add_trace_event(trace_id, "LLM_CALL", {"model": MODELS["support"]})
-    result = call_llm(MODELS["support"], messages)
+    add_trace_event(
+        trace_id,
+        "LLM_CALL_STREAM",
+        {
+            "model_key": model_key,
+            "model": model_name,
+        },
+    )
 
-    record_latency(time.time() - start_time)
-    close_trace(trace_id)
-    return result
+    yield from call_llm_stream(
+        model_name,
+        messages,
+    )
+
+
+def handle_stream(
+    user_input: str,
+    selected_model: str = "auto",
+) -> Generator[str, None, None]:
+    """
+    Process and stream a chat response.
+
+    Manual modes bypass the router.
+    Auto mode uses router.py.
+    """
+    trace_id = new_trace_id()
+    start_time = time.time()
+
+    if not isinstance(user_input, str):
+        user_input = str(user_input)
+
+    user_input = user_input.strip()
+
+    if selected_model not in ALLOWED_MODEL_MODES:
+        selected_model = "auto"
+
+    add_trace_event(
+        trace_id,
+        "REQUEST_RECEIVED",
+        {
+            "user_input": user_input,
+            "selected_model": selected_model,
+        },
+    )
+
+    log_event(
+        "TRACE_START",
+        {
+            "trace_id": trace_id,
+            "selected_model": selected_model,
+        },
+    )
+
+    try:
+        if not user_input:
+            yield "Please enter a message."
+            return
+
+        # ========================================================
+        # MANUAL MODEL SELECTION
+        # ========================================================
+
+        if selected_model != "auto":
+            intent = selected_model
+
+            record_request(intent)
+
+            add_trace_event(
+                trace_id,
+                "MANUAL_MODEL_SELECTED",
+                {
+                    "intent": intent,
+                },
+            )
+
+            log_event(
+                "MANUAL_MODEL_SELECTED",
+                {
+                    "intent": intent,
+                },
+                trace_id,
+            )
+
+            model_key = get_model_key_for_intent(intent)
+            system_prompt = get_prompt_for_intent(intent)
+
+            yield from stream_model(
+                model_key=model_key,
+                system_prompt=system_prompt,
+                user_content=user_input,
+                trace_id=trace_id,
+            )
+
+            return
+
+        # ========================================================
+        # AUTO MODE
+        # ========================================================
+
+        task = route(user_input)
+
+        add_trace_event(
+            trace_id,
+            "ROUTER_OUTPUT",
+            task,
+        )
+
+        log_event(
+            "ROUTER_OUTPUT",
+            task,
+            trace_id,
+        )
+
+        entities = task.get("entities", {})
+
+        if not isinstance(entities, dict):
+            entities = {}
+
+        add_trace_event(
+            trace_id,
+            "ENTITIES",
+            entities,
+        )
+
+        intent, confidence = select_intent(task)
+
+        # Low-confidence routes become reasoning.
+        if confidence < MIN_CONFIDENCE:
+            intent = DEFAULT_MODEL_KEY
+
+        # Support requires higher confidence.
+        if (
+            intent == "support"
+            and confidence < MIN_SUPPORT_CONFIDENCE
+        ):
+            intent = DEFAULT_MODEL_KEY
+
+        record_request(intent)
+
+        add_trace_event(
+            trace_id,
+            "INTENT_SELECTED",
+            {
+                "intent": intent,
+                "confidence": confidence,
+            },
+        )
+
+        log_event(
+            "INTENT",
+            {
+                "intent": intent,
+                "confidence": confidence,
+            },
+            trace_id,
+        )
+
+        # ========================================================
+        # PRODUCT SEARCH
+        # ========================================================
+
+        if intent == "product_search":
+            query = normalize_query(
+                entities,
+                user_input,
+            )
+
+            max_price = (
+                entities.get("max_price")
+                or entities.get("price")
+            )
+
+            add_trace_event(
+                trace_id,
+                "PRODUCT_SEARCH",
+                {
+                    "query": query,
+                    "max_price": max_price,
+                },
+            )
+
+            results = search_products_semantic(query)
+
+            if not results:
+                results = search_products(
+                    query,
+                    max_price,
+                )
+
+            if not results:
+                yield "No matching products were found."
+                return
+
+            product_content = (
+                f"Original customer question:\n"
+                f"{user_input}\n\n"
+                f"Product search results:\n"
+                f"{results}"
+            )
+
+            yield from stream_model(
+                model_key="reasoning",
+                system_prompt=PRODUCT_SYSTEM_PROMPT,
+                user_content=product_content,
+                trace_id=trace_id,
+            )
+
+            return
+
+        # ========================================================
+        # WEATHER
+        # ========================================================
+
+        if intent == "weather":
+            location = entities.get("location")
+
+            if not location:
+                yield (
+                    "Please provide a city or location "
+                    "for the weather lookup."
+                )
+                return
+
+            add_trace_event(
+                trace_id,
+                "WEATHER_LOOKUP",
+                {
+                    "location": str(location),
+                },
+            )
+
+            weather_data = weather(
+                str(location)
+            )
+
+            weather_content = (
+                f"Original question:\n"
+                f"{user_input}\n\n"
+                f"Weather data:\n"
+                f"{weather_data}"
+            )
+
+            yield from stream_model(
+                model_key="reasoning",
+                system_prompt=WEATHER_SYSTEM_PROMPT,
+                user_content=weather_content,
+                trace_id=trace_id,
+            )
+
+            return
+
+        # ========================================================
+        # SUMMARIZER VALIDATION
+        # ========================================================
+
+        if (
+            intent == "summarizer"
+            and len(user_input.split()) < 20
+        ):
+            yield (
+                "Please provide the article or text "
+                "you want summarized."
+            )
+            return
+
+        # ========================================================
+        # STANDARD INTENTS
+        # ========================================================
+
+        model_key = get_model_key_for_intent(intent)
+        system_prompt = get_prompt_for_intent(intent)
+
+        yield from stream_model(
+            model_key=model_key,
+            system_prompt=system_prompt,
+            user_content=user_input,
+            trace_id=trace_id,
+        )
+
+    except Exception as error:
+        add_trace_event(
+            trace_id,
+            "HANDLER_ERROR",
+            {
+                "error": str(error),
+                "selected_model": selected_model,
+            },
+        )
+
+        log_event(
+            "HANDLER_ERROR",
+            {
+                "error": str(error),
+                "selected_model": selected_model,
+            },
+            trace_id,
+        )
+
+        # Attempt one fallback using the reasoning model.
+        if selected_model != "reasoning":
+            try:
+                yield from stream_model(
+                    model_key="reasoning",
+                    system_prompt=GENERAL_SYSTEM_PROMPT,
+                    user_content=user_input,
+                    trace_id=trace_id,
+                )
+                return
+
+            except Exception as fallback_error:
+                add_trace_event(
+                    trace_id,
+                    "FALLBACK_ERROR",
+                    {
+                        "error": str(fallback_error),
+                    },
+                )
+
+                log_event(
+                    "FALLBACK_ERROR",
+                    {
+                        "error": str(fallback_error),
+                    },
+                    trace_id,
+                )
+
+        yield (
+            "I encountered an error while processing "
+            "your request. Please try again."
+        )
+
+    finally:
+        record_latency(
+            time.time() - start_time
+        )
+
+        close_trace(trace_id)
+
+
+def handle(
+    user_input: str,
+    selected_model: str = "auto",
+) -> str:
+    """
+    Non-streaming version of the handler.
+
+    It consumes handle_stream() and returns one complete string.
+    """
+    chunks: list[str] = []
+
+    for chunk in handle_stream(
+        user_input=user_input,
+        selected_model=selected_model,
+    ):
+        if chunk is None:
+            continue
+
+        chunks.append(str(chunk))
+
+    return "".join(chunks)

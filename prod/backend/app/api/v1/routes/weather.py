@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
-
-from prod.backend.app.core.tools import weather as weather_tool
+from app.core.handler import handle
+from app.core.tools import weather as weather_tool
 
 router = APIRouter(prefix="/weather")
 
