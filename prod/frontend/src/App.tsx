@@ -1,7 +1,4 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
 import Chat from "./pages/Chat";
 import Navbar from "./components/Navbar";
@@ -13,60 +10,19 @@ import type {
   ModelMode,
 } from "./types";
 
-function getSavedAppearance(): AppearanceMode {
-  try {
-    const saved =
-      localStorage.getItem("appearance");
-
-    if (
-      saved === "system" ||
-      saved === "light" ||
-      saved === "dark"
-    ) {
-      return saved;
-    }
-  } catch {
-    // Use system when storage is unavailable.
-  }
-
-  return "system";
-}
-
-function getSavedModel(): ModelMode {
-  try {
-    const saved =
-      localStorage.getItem("selectedModel");
-
-    if (
-      saved === "auto" ||
-      saved === "reasoning" ||
-      saved === "code" ||
-      saved === "math" ||
-      saved === "support"
-    ) {
-      return saved;
-    }
-  } catch {
-    // Use auto when storage is unavailable.
-  }
-
-  return "auto";
-}
-
 export default function App() {
   const [appearance, setAppearance] =
-    useState<AppearanceMode>(
-      getSavedAppearance,
-    );
+    useState<AppearanceMode>("system");
 
   const [selectedModel, setSelectedModel] =
-    useState<ModelMode>(getSavedModel);
+    useState<ModelMode>("auto");
 
   const [settingsOpen, setSettingsOpen] =
     useState(false);
 
-  // Incrementing this key remounts Chat and clears
-  // the current in-memory conversation.
+  const [sidebarOpen, setSidebarOpen] =
+    useState(false);
+
   const [chatKey, setChatKey] = useState(0);
 
   useEffect(() => {
@@ -75,7 +31,7 @@ export default function App() {
     );
 
     function applyAppearance() {
-      const shouldUseDark =
+      const useDark =
         appearance === "dark" ||
         (
           appearance === "system" &&
@@ -84,7 +40,7 @@ export default function App() {
 
       document.documentElement.classList.toggle(
         "dark",
-        shouldUseDark,
+        useDark,
       );
     }
 
@@ -97,14 +53,10 @@ export default function App() {
       );
     }
 
-    try {
-      localStorage.setItem(
-        "appearance",
-        appearance,
-      );
-    } catch {
-      // Ignore storage failures.
-    }
+    localStorage.setItem(
+      "appearance",
+      appearance,
+    );
 
     return () => {
       mediaQuery.removeEventListener(
@@ -114,17 +66,6 @@ export default function App() {
     };
   }, [appearance]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        "selectedModel",
-        selectedModel,
-      );
-    } catch {
-      // Ignore storage failures.
-    }
-  }, [selectedModel]);
-
   function startNewChat() {
     setChatKey((current) => current + 1);
   }
@@ -132,6 +73,8 @@ export default function App() {
   return (
     <div className="flex h-dvh overflow-hidden bg-white dark:bg-gray-900">
       <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
         onNewChat={startNewChat}
         onOpenSettings={() =>
           setSettingsOpen(true)
@@ -139,7 +82,11 @@ export default function App() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Navbar />
+        <Navbar
+          onOpenSidebar={() =>
+            setSidebarOpen(true)
+          }
+        />
 
         <div className="min-h-0 flex-1">
           <Chat

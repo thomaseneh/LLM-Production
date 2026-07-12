@@ -140,7 +140,7 @@ function ModelPicker({
   return (
     <div
       ref={pickerRef}
-      className="relative shrink-0"
+      className="relative w-full shrink-0 sm:w-auto"
     >
       <button
         type="button"
@@ -153,7 +153,7 @@ function ModelPicker({
         className="
           flex
           h-12
-          min-w-[190px]
+          w-full sm:min-w-[190px] sm:w-auto
           items-center
           justify-between
           gap-3
@@ -209,7 +209,7 @@ function ModelPicker({
             left-0
             z-40
             mb-2
-            w-80
+            w-full sm:w-80
             overflow-hidden
             rounded-xl
             border
@@ -413,7 +413,7 @@ export default function Chat({
   }
 
   const inputArea = (
-    <div className="flex w-full items-end gap-3">
+    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
       <ModelPicker
         selectedModel={selectedModel}
         onModelChange={onModelChange}
@@ -442,7 +442,7 @@ export default function Chat({
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-6">
+            <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-4 sm:px-6 sm:py-6">
               {messages.map(
                 (message, index) => (
                   <ChatBubble
@@ -471,7 +471,7 @@ export default function Chat({
               dark:bg-gray-900
             "
           >
-            <div className="mx-auto w-full max-w-4xl">
+            <div className="mx-auto w-full max-w-4xl px-1 sm:px-0">
               {inputArea}
             </div>
           </div>
