@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import {
+  ArrowUp,
   Brain,
   Check,
   ChevronDown,
@@ -15,9 +16,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { streamChat } from "../api/client";
 import ChatBubble from "../components/ChatBubble";
 import ChatInput from "../components/ChatInput";
-import { streamChat } from "../api/client";
 import type { ModelMode } from "../types";
 
 type Message = {
@@ -37,62 +38,74 @@ interface ModelOption {
   icon: LucideIcon;
 }
 
-const modelOptions: ModelOption[] = [
-  {
-    value: "auto",
-    label: "Auto",
-    description: "Automatically choose the best model",
-    icon: Sparkles,
-  },
-  {
-    value: "reasoning",
-    label: "Deep Reasoning",
-    description: "Best for analysis and explanations",
-    icon: Brain,
-  },
-  {
-    value: "code",
-    label: "Write Code",
-    description: "Programming and debugging",
-    icon: Code2,
-  },
-  {
-    value: "math",
-    label: "Maths",
-    description: "Calculations and equations",
-    icon: Sigma,
-  },
-  {
-    value: "support",
-    label: "Customer Support",
-    description: "Orders, refunds, and customer help",
-    icon: Headphones,
-  },
-];
-
 interface ModelPickerProps {
   selectedModel: ModelMode;
   onModelChange: (model: ModelMode) => void;
   disabled?: boolean;
 }
 
+const modelOptions: ModelOption[] = [
+  {
+    value: "auto",
+    label: "Auto",
+    description:
+      "Automatically choose the best model",
+    icon: Sparkles,
+  },
+  {
+    value: "reasoning",
+    label: "Deep Reasoning",
+    description:
+      "Best for analysis and explanations",
+    icon: Brain,
+  },
+  {
+    value: "code",
+    label: "Write Code",
+    description:
+      "Programming and debugging",
+    icon: Code2,
+  },
+  {
+    value: "math",
+    label: "Maths",
+    description:
+      "Calculations and equations",
+    icon: Sigma,
+  },
+  {
+    value: "support",
+    label: "Customer Support",
+    description:
+      "Orders, refunds, and customer help",
+    icon: Headphones,
+  },
+];
+
 function ModelPicker({
   selectedModel,
   onModelChange,
   disabled = false,
 }: ModelPickerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const [isOpen, setIsOpen] =
+    useState(false);
+
+  const pickerRef =
+    useRef<HTMLDivElement | null>(null);
 
   const selectedOption =
     modelOptions.find(
-      (option) => option.value === selectedModel,
+      (option) =>
+        option.value === selectedModel,
     ) ?? modelOptions[0];
 
-  const SelectedIcon = selectedOption.icon;
+  const SelectedIcon =
+    selectedOption.icon;
 
   useEffect(() => {
-    function handleOutsideClick(event: MouseEvent) {
+    function handleOutsideClick(
+      event: MouseEvent,
+    ) {
       if (
         pickerRef.current &&
         !pickerRef.current.contains(
@@ -103,7 +116,9 @@ function ModelPicker({
       }
     }
 
-    function handleEscape(event: KeyboardEvent) {
+    function handleEscape(
+      event: globalThis.KeyboardEvent,
+    ) {
       if (event.key === "Escape") {
         setIsOpen(false);
       }
@@ -132,7 +147,9 @@ function ModelPicker({
     };
   }, []);
 
-  function selectModel(model: ModelMode) {
+  function selectModel(
+    model: ModelMode,
+  ) {
     onModelChange(model);
     setIsOpen(false);
   }
@@ -140,63 +157,69 @@ function ModelPicker({
   return (
     <div
       ref={pickerRef}
-      className="relative w-full shrink-0 sm:w-auto"
+      className="relative shrink-0"
     >
       <button
         type="button"
         disabled={disabled}
-        onClick={() =>
-          setIsOpen((previous) => !previous)
-        }
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        onClick={() =>
+          setIsOpen(
+            (previous) => !previous,
+          )
+        }
         className="
           flex
-          h-12
-          w-full sm:min-w-[190px] sm:w-auto
+          h-9
+          max-w-[155px]
           items-center
-          justify-between
-          gap-3
-          rounded-xl
-          border
-          border-gray-300
-          bg-white
-          px-4
+          gap-2
+          rounded-lg
+          bg-transparent
+          px-2
           text-left
           text-sm
-          text-gray-900
-          shadow-sm
+          font-medium
+          text-gray-700
           outline-none
           transition
-          hover:bg-gray-50
-          focus:border-blue-500
-          focus:ring-2
-          focus:ring-blue-500/20
+          hover:bg-gray-100
+          focus-visible:ring-2
+          focus-visible:ring-blue-500/30
           disabled:cursor-not-allowed
-          disabled:opacity-60
+          disabled:opacity-50
 
-          dark:border-gray-700
-          dark:bg-gray-800
-          dark:text-white
+          dark:text-gray-200
           dark:hover:bg-gray-700
         "
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <SelectedIcon
-            size={18}
-            className="shrink-0 text-blue-600 dark:text-blue-400"
-          />
+        <SelectedIcon
+          size={17}
+          className="
+            shrink-0
+            text-blue-600
+            dark:text-blue-400
+          "
+        />
 
-          <span className="truncate font-medium">
-            {selectedOption.label}
-          </span>
+        <span className="truncate">
+          {selectedOption.label}
         </span>
 
         <ChevronDown
-          size={17}
-          className={`shrink-0 text-gray-500 transition-transform dark:text-gray-400 ${
-            isOpen ? "rotate-180" : ""
-          }`}
+          size={15}
+          className={`
+            shrink-0
+            text-gray-500
+            transition-transform
+            dark:text-gray-400
+            ${
+              isOpen
+                ? "rotate-180"
+                : ""
+            }
+          `}
         />
       </button>
 
@@ -207,9 +230,9 @@ function ModelPicker({
             absolute
             bottom-full
             left-0
-            z-40
+            z-50
             mb-2
-            w-full sm:w-80
+            w-[min(20rem,calc(100vw-2rem))]
             overflow-hidden
             rounded-xl
             border
@@ -222,60 +245,48 @@ function ModelPicker({
             dark:bg-gray-800
           "
         >
-          {modelOptions.map((option) => {
-            const Icon = option.icon;
-            const isSelected =
-              option.value === selectedModel;
+          {modelOptions.map(
+            (option) => {
+              const Icon =
+                option.icon;
 
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                onClick={() =>
-                  selectModel(option.value)
-                }
-                className={`
-                  flex
-                  w-full
-                  items-start
-                  gap-3
-                  rounded-lg
-                  px-3
-                  py-3
-                  text-left
-                  transition
-                  ${
+              const isSelected =
+                option.value ===
+                selectedModel;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={
                     isSelected
-                      ? "bg-blue-50 dark:bg-blue-950/40"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-700"
                   }
-                `}
-              >
-                <Icon
-                  size={19}
-                  className="
-                    mt-0.5
-                    shrink-0
-                    text-blue-600
-                    dark:text-blue-400
-                  "
-                />
+                  onClick={() =>
+                    selectModel(
+                      option.value,
+                    )
+                  }
+                  className={`
+                    flex
+                    w-full
+                    items-start
+                    gap-3
+                    rounded-lg
+                    px-3
+                    py-3
+                    text-left
+                    transition
 
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-gray-900 dark:text-white">
-                    {option.label}
-                  </span>
-
-                  <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-                    {option.description}
-                  </span>
-                </span>
-
-                {isSelected && (
-                  <Check
-                    size={17}
+                    ${
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-950/40"
+                        : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }
+                  `}
+                >
+                  <Icon
+                    size={19}
                     className="
                       mt-0.5
                       shrink-0
@@ -283,10 +294,36 @@ function ModelPicker({
                       dark:text-blue-400
                     "
                   />
-                )}
-              </button>
-            );
-          })}
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-gray-900 dark:text-white">
+                      {
+                        option.label
+                      }
+                    </span>
+
+                    <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">
+                      {
+                        option.description
+                      }
+                    </span>
+                  </span>
+
+                  {isSelected && (
+                    <Check
+                      size={17}
+                      className="
+                        mt-0.5
+                        shrink-0
+                        text-blue-600
+                        dark:text-blue-400
+                      "
+                    />
+                  )}
+                </button>
+              );
+            },
+          )}
         </div>
       )}
     </div>
@@ -297,9 +334,12 @@ export default function Chat({
   selectedModel,
   onModelChange,
 }: ChatProps) {
-  const [input, setInput] = useState("");
+  const [input, setInput] =
+    useState("");
+
   const [messages, setMessages] =
     useState<Message[]>([]);
+
   const [isLoading, setIsLoading] =
     useState(false);
 
@@ -310,7 +350,8 @@ export default function Chat({
     HTMLInputElement | HTMLTextAreaElement
   >(null!);
 
-  const hasMessages = messages.length > 0;
+  const hasMessages =
+    messages.length > 0;
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -329,53 +370,69 @@ export default function Chat({
     });
   }, [messages, hasMessages]);
 
-  async function handleSend(message: string) {
+  async function handleSend(
+    message: string,
+  ) {
     const trimmed = message.trim();
 
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading) {
+      return;
+    }
 
     setIsLoading(true);
     setInput("");
 
-    setMessages((previous) => [
-      ...previous,
-      {
-        sender: "user",
-        text: trimmed,
-      },
-      {
-        sender: "assistant",
-        text: "",
-      },
-    ]);
+    setMessages(
+      (previousMessages) => [
+        ...previousMessages,
+        {
+          sender: "user",
+          text: trimmed,
+        },
+        {
+          sender: "assistant",
+          text: "",
+        },
+      ],
+    );
 
     try {
       await streamChat(
         trimmed,
         selectedModel,
         (chunk) => {
-          setMessages((previous) => {
-            const updated = [...previous];
-            const lastIndex =
-              updated.length - 1;
-            const lastMessage =
-              updated[lastIndex];
+          setMessages(
+            (previousMessages) => {
+              const updatedMessages = [
+                ...previousMessages,
+              ];
 
-            if (
-              lastMessage &&
-              lastMessage.sender ===
+              const lastIndex =
+                updatedMessages.length -
+                1;
+
+              const lastMessage =
+                updatedMessages[
+                  lastIndex
+                ];
+
+              if (
+                lastMessage?.sender ===
                 "assistant"
-            ) {
-              updated[lastIndex] = {
-                ...lastMessage,
-                text:
-                  lastMessage.text +
-                  chunk,
-              };
-            }
+              ) {
+                updatedMessages[
+                  lastIndex
+                ] = {
+                  ...lastMessage,
+                  text:
+                    lastMessage.text +
+                    chunk,
+                };
+              }
 
-            return updated;
-          });
+              return updatedMessages;
+            },
+          );
         },
       );
     } catch (error) {
@@ -384,25 +441,32 @@ export default function Chat({
         error,
       );
 
-      setMessages((previous) => {
-        const updated = [...previous];
-        const lastIndex =
-          updated.length - 1;
+      setMessages(
+        (previousMessages) => {
+          const updatedMessages = [
+            ...previousMessages,
+          ];
 
-        if (
-          lastIndex >= 0 &&
-          updated[lastIndex].sender ===
-            "assistant"
-        ) {
-          updated[lastIndex] = {
-            sender: "assistant",
-            text:
-              "Error: backend unreachable.",
-          };
-        }
+          const lastIndex =
+            updatedMessages.length - 1;
 
-        return updated;
-      });
+          if (
+            lastIndex >= 0 &&
+            updatedMessages[lastIndex]
+              .sender === "assistant"
+          ) {
+            updatedMessages[
+              lastIndex
+            ] = {
+              sender: "assistant",
+              text:
+                "Error: backend unreachable.",
+            };
+          }
+
+          return updatedMessages;
+        },
+      );
     } finally {
       setIsLoading(false);
 
@@ -412,21 +476,95 @@ export default function Chat({
     }
   }
 
-  const inputArea = (
-    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
-      <ModelPicker
-        selectedModel={selectedModel}
-        onModelChange={onModelChange}
+  const canSend =
+    input.trim().length > 0 &&
+    !isLoading;
+
+  const composer = (
+    <div
+      className="
+        w-full
+        rounded-2xl
+        border
+        border-gray-300
+        bg-white
+        px-3
+        py-2
+        shadow-sm
+        transition
+        focus-within:border-blue-500
+        focus-within:ring-2
+        focus-within:ring-blue-500/20
+
+        dark:border-gray-700
+        dark:bg-gray-800
+      "
+    >
+      <ChatInput
+        value={input}
+        onChange={setInput}
+        onSend={handleSend}
+        inputRef={inputFocusRef}
         disabled={isLoading}
       />
 
-      <div className="min-w-0 flex-1">
-        <ChatInput
-          value={input}
-          onChange={setInput}
-          onSend={handleSend}
-          inputRef={inputFocusRef}
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <ModelPicker
+          selectedModel={
+            selectedModel
+          }
+          onModelChange={
+            onModelChange
+          }
+          disabled={isLoading}
         />
+
+        <button
+          type="button"
+          aria-label="Send message"
+          disabled={!canSend}
+          onClick={() =>
+            handleSend(input)
+          }
+          className="
+            flex
+            h-9
+            w-9
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-blue-600
+            text-white
+            transition
+            hover:bg-blue-700
+            focus-visible:outline-none
+            focus-visible:ring-2
+            focus-visible:ring-blue-500/40
+            disabled:cursor-not-allowed
+            disabled:bg-gray-300
+            disabled:text-gray-500
+
+            dark:disabled:bg-gray-600
+            dark:disabled:text-gray-300
+          "
+        >
+          {isLoading ? (
+            <span
+              className="
+                h-4
+                w-4
+                animate-spin
+                rounded-full
+                border-2
+                border-white/40
+                border-t-white
+              "
+            />
+          ) : (
+            <ArrowUp size={18} />
+          )}
+        </button>
       </div>
     </div>
   );
@@ -434,9 +572,9 @@ export default function Chat({
   return (
     <main className="flex h-full min-h-0 flex-col bg-white dark:bg-gray-900">
       {!hasMessages ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-          <div className="w-full max-w-4xl">
-            {inputArea}
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4 sm:px-6">
+          <div className="w-full max-w-3xl">
+            {composer}
           </div>
         </div>
       ) : (
@@ -444,13 +582,18 @@ export default function Chat({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-4 sm:px-6 sm:py-6">
               {messages.map(
-                (message, index) => (
+                (
+                  message,
+                  index,
+                ) => (
                   <ChatBubble
                     key={`${message.sender}-${index}`}
                     sender={
                       message.sender
                     }
-                    text={message.text}
+                    text={
+                      message.text
+                    }
                   />
                 ),
               )}
@@ -465,14 +608,18 @@ export default function Chat({
               border-t
               border-gray-200
               bg-white
-              p-4
+              px-4
+              pb-4
+              pt-3
 
               dark:border-gray-700
               dark:bg-gray-900
+
+              sm:px-6
             "
           >
-            <div className="mx-auto w-full max-w-4xl px-1 sm:px-0">
-              {inputArea}
+            <div className="mx-auto w-full max-w-3xl">
+              {composer}
             </div>
           </div>
         </>
